@@ -79,6 +79,7 @@ function get_input_images(opt)
       table.insert(image_paths, img_in_path)
       table.insert(original_paths, img_path)
     end
+  end
 
   return image_paths, original_paths
 end
