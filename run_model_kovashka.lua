@@ -34,19 +34,12 @@ cmd:option('-final_nms_thresh', 0.3)
 cmd:option('-num_proposals', 1000)
 
 -- Input settings
-cmd:option('-input_qa_json_file_path', '',
-  'A path to a single specific image to caption')
+cmd:option('-input_dir', '')
+cmd:option('-input_qa_json_file_path', '')
 
 -- Output settings
 cmd:option('-max_images', 100, 'max number of images to process')
 cmd:option('-output_dir', '')
-    -- these settings are only used if output_dir is not empty
-    cmd:option('-num_to_draw', 10, 'max number of predictions per image')
-    cmd:option('-text_size', 2, '2 looks best I think')
-    cmd:option('-box_width', 2, 'width of rendered box')
-cmd:option('-output_vis', 1,
-  'if 1 then writes files needed for pretty vis into vis/ ')
-cmd:option('-output_vis_dir', 'vis/data')
 
 -- Misc
 cmd:option('-gpu', 0)
@@ -68,55 +61,26 @@ function run_image(model, img_path, opt, dtype)
 
   -- Run the model forward
   local boxes, scores, captions = model:forward_test(img_caffe:type(dtype))
-  local boxes_xywh = box_utils.xcycwh_to_xywh(boxes)
 
-  local out = {
-    img = img,
-    boxes = boxes_xywh,
-    scores = scores,
-    captions = captions,
-  }
-  return out
-end
-
-function result_to_json(result)
-  local out = {}
-  out.captions = result.captions
-  return out
-end
-
-function lua_render_result(result, opt)
-  -- use lua utilities to render results onto the image (without going)
-  -- through the vis utilities written in JS/HTML. Kind of ugly output.
-
-  -- respect the num_to_draw setting and slice the results appropriately
-  local boxes = result.boxes
-  local num_boxes = math.min(opt.num_to_draw, boxes:size(1))
-  boxes = boxes[{{1, num_boxes}}]
-  local captions_sliced = {}
-  for i = 1, num_boxes do
-    table.insert(captions_sliced, result.captions[i])
-  end
-
-  -- Convert boxes and draw output image
-  local draw_opt = { text_size = opt.text_size, box_width = opt.box_width }
-  local img_out = vis_utils.densecap_draw(result.img, boxes, captions_sliced, draw_opt)
-  return img_out
+  return captions
 end
 
 function get_input_images(opt)
   -- utility function that figures out which images we should process 
   -- and fetches all the raw image paths
   local image_paths = {}
+  local original_paths = {}
+
   qa_combined_action_reason = utils.read_json(opt.input_qa_json_file_path)
 
   for img_path, value in pairs(qa_combined_action_reason)
     do
       local img_in_path = paths.concat(opt.input_dir, img_path)
       table.insert(image_paths, img_in_path)
+      table.insert(original_paths, img_path)
     end
 
-  return image_paths
+  return image_paths, original_paths
 end
 
 -- Load the model, and cast to the right type
@@ -132,35 +96,23 @@ model:setTestArgs{
 model:evaluate()
 
 -- get paths to all images we should be evaluating
-local image_paths = get_input_images(opt)
+local image_paths, original_paths = get_input_images(opt)
 local num_process = math.min(#image_paths, opt.max_images)
 local results_json = {}
+
 for k=1,num_process do
   local img_path = image_paths[k]
+  local original_path = original_paths[k]
   print(string.format('%d/%d processing image %s', k, num_process, img_path))
+
   -- run the model on the image and obtain results
-  local result = run_image(model, img_path, opt, dtype)  
-  -- handle output serialization: either to directory or for pretty html vis
-  if opt.output_dir ~= '' then
-    local img_out = lua_render_result(result, opt)
-    local img_out_path = paths.concat(opt.output_dir, paths.basename(img_path))
-    image.save(img_out_path, img_out)
-  end
-  if opt.output_vis == 1 then
-    -- save the raw image to vis/data/
-    local img_out_path = paths.concat(opt.output_vis_dir, paths.basename(img_path))
-    image.save(img_out_path, result.img)
-    -- keep track of the (thin) json information with all result metadata
-    local result_json = result_to_json(result)
-    result_json.img_name = paths.basename(img_path)
-    table.insert(results_json, result_json)
+  local caption = run_image(model, img_path, opt, dtype)  
+
+  results_json[original_path] = caption
   end
 end
 
 if #results_json > 0 then
   -- serialize to json
-  local out = {}
-  out.results = results_json
-  out.opt = opt
-  utils.write_json(paths.concat(opt.output_vis_dir, 'results.json'), out)
+  utils.write_json(paths.concat(opt.output_dir, 'results.json'), results_json)
 end
