@@ -81,8 +81,6 @@ end
 
 function result_to_json(result)
   local out = {}
-  out.boxes = result.boxes:float():totable()
-  out.scores = result.scores:float():view(-1):totable()
   out.captions = result.captions
   return out
 end
@@ -110,27 +108,14 @@ function get_input_images(opt)
   -- utility function that figures out which images we should process 
   -- and fetches all the raw image paths
   local image_paths = {}
-  if opt.input_image ~= '' then
-    table.insert(image_paths, opt.input_image)
-  elseif opt.input_dir ~= '' then
-    -- iterate all files in input directory and add them to work
-    for fn in paths.files(opt.input_dir) do
-      if string.sub(fn, 1, 1) ~= '.' then
-        local img_in_path = paths.concat(opt.input_dir, fn)
-        table.insert(image_paths, img_in_path)
-      end
-    end
-  elseif opt.input_split ~= '' then
-    -- load json information that contains the splits information for VG
-    local info = utils.read_json(opt.splits_json)
-    local split_img_ids = info[opt.input_split] -- is a table of integer ids
-    for k=1,#split_img_ids do
-      local img_in_path = paths.concat(opt.vg_img_root_dir, tostring(split_img_ids[k]) .. '.jpg')
+  qa_combined_action_reason = utils.read_json(opt.input_qa_json_file_path)
+
+  for img_path, value in pairs(qa_combined_action_reason)
+    do
+      local img_in_path = paths.concat(opt.input_dir, img_path)
       table.insert(image_paths, img_in_path)
     end
-  else
-    error('one of input_image, input_dir, or input_split must be provided.')
-  end
+
   return image_paths
 end
 
