@@ -111,7 +111,5 @@ for k=1,num_process do
   results_json[original_path] = caption
 end
 
-if #results_json > 0 then
-  -- serialize to json
-  utils.write_json(paths.concat(opt.output_dir, 'results.json'), results_json)
-end
+-- serialize to json
+utils.write_json(paths.concat(opt.output_dir, 'results.json'), results_json)
