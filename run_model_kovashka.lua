@@ -78,7 +78,6 @@ function get_input_images(opt)
       local img_in_path = paths.concat(opt.input_dir, img_path)
       table.insert(image_paths, img_in_path)
       table.insert(original_paths, img_path)
-    end
   end
 
   return image_paths, original_paths
@@ -110,7 +109,6 @@ for k=1,num_process do
   local caption = run_image(model, img_path, opt, dtype)  
 
   results_json[original_path] = caption
-  end
 end
 
 if #results_json > 0 then
